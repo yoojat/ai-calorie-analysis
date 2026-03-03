@@ -1,3 +1,4 @@
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
@@ -164,8 +165,14 @@ export default function TabOneScreen() {
 
       {/* 하단 컨트롤 바 */}
       <View style={styles.controllerBar}>
-        <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
-          <Text style={{ fontSize: 30 }}>🖼️</Text>
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={pickImage}
+          activeOpacity={0.7}
+        >
+          <View style={styles.galleryIconWrapper}>
+            <FontAwesome name="image" size={24} color="#333" />
+          </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
           <View style={styles.captureButtonInner} />
@@ -228,6 +235,20 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 50,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  galleryIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   preview: {
     flex: 1,
