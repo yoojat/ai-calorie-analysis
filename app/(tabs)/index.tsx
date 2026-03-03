@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   Alert,
@@ -8,14 +9,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// 1. 필수 라이브러리 임포트
 import { analyzeImage } from "@/services/gemini-api";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 
 export default function TabOneScreen() {
-  // --- 상태 관리 (State) ---
-  const [permission, requestPermission] = useCameraPermissions(); // 카메라 권한 상태
+  const router = useRouter();
+  const [permission, requestPermission] = useCameraPermissions();
   const [photo, setPhoto] = useState<string | null>(null); // 촬영된 사진 URI
   const [photoBase64, setPhotoBase64] = useState<string | null>(null); // API 전송용 base64
   const [isAnalyzing, setIsAnalyzing] = useState(false); // 분석 중 로딩 상태
@@ -98,16 +98,11 @@ export default function TabOneScreen() {
       if (text) {
         const jsonStr = extractJson(text);
         const json = JSON.parse(jsonStr);
-        const resultString = json.map((item: any) => {
-          return `${item.name} - ${item.calories}kcal`;
+        const items = Array.isArray(json) ? json : [json];
+        router.push({
+          pathname: "/result",
+          params: { data: JSON.stringify(items) },
         });
-        const totalCalories = json.reduce((acc: number, item: any) => {
-          return acc + item.calories;
-        }, 0);
-        Alert.alert(
-          "칼로리 분석 결과",
-          resultString.join("\n") + "\n총 칼로리: " + totalCalories + "kcal",
-        );
       } else {
         Alert.alert("분석 완료", JSON.stringify(analysisResult));
       }

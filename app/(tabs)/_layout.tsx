@@ -22,8 +22,6 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: useClientOnlyValue(false, true),
-        // 단일 페이지 구성: 탭 바 숨김. 차후 탭 추가 시 아래 줄 제거
-        tabBarStyle: { display: "none" },
       }}
     >
       <Tabs.Screen
@@ -37,7 +35,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="two"
         options={{
-          href: null,
+          title: "기록 보기",
+          tabBarIcon: ({ color }) => <TabBarIcon name="list" color={color} />,
         }}
       />
     </Tabs>
