@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AdBanner from "@/components/AdBanner";
 import { analyzeImage } from "@/services/gemini-api";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
@@ -149,6 +150,7 @@ export default function TabOneScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+        {isAnalyzing && <AdBanner />}
       </View>
     );
   }
