@@ -59,6 +59,20 @@ function RootLayoutNav() {
             presentation: "modal",
           }}
         />
+        <Stack.Screen
+          name="edit-record"
+          options={{
+            title: "기록 수정",
+            presentation: "modal",
+          }}
+        />
+        <Stack.Screen
+          name="add-record"
+          options={{
+            title: "기록 추가",
+            presentation: "modal",
+          }}
+        />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
     </ThemeProvider>

@@ -19,12 +19,17 @@ export interface DietRecord {
   items: DietItem[];
 }
 
-export async function saveDietRecord(items: DietItem[]): Promise<DietRecord> {
+export async function saveDietRecord(
+  items: DietItem[],
+  date?: string,
+): Promise<DietRecord> {
   const now = new Date();
+  const dateStr = date ?? now.toISOString().slice(0, 10);
+  const timeStr = now.toISOString().slice(11, 19);
   const record: DietRecord = {
     id: `${now.getTime()}-${Math.random().toString(36).slice(2)}`,
-    recordedAt: now.toISOString(),
-    date: now.toISOString().slice(0, 10), // YYYY-MM-DD
+    recordedAt: `${dateStr}T${timeStr}Z`,
+    date: dateStr,
     items,
   };
 
@@ -49,4 +54,16 @@ export async function getDietRecordsByDate(
 ): Promise<DietRecord[]> {
   const records = await getDietRecords();
   return records.filter((r) => r.date === date);
+}
+
+export async function deleteDietRecord(id: string): Promise<void> {
+  const existing = await getDietRecords();
+  const updated = existing.filter((r) => r.id !== id);
+  await AsyncStorage.setItem(DIET_RECORDS_KEY, JSON.stringify(updated));
+}
+
+export async function updateDietRecord(record: DietRecord): Promise<void> {
+  const existing = await getDietRecords();
+  const updated = existing.map((r) => (r.id === record.id ? record : r));
+  await AsyncStorage.setItem(DIET_RECORDS_KEY, JSON.stringify(updated));
 }

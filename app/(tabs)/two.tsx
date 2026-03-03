@@ -1,22 +1,25 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
-import {
-  Calendar,
-  DateData,
-} from "react-native-calendars";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
+import { Calendar, DateData } from "react-native-calendars";
 
 import {
+  deleteDietRecord,
   getDietRecords,
   type DietItem,
   type DietRecord,
 } from "@/services/diet-storage";
+import { notifyRefreshNeeded, onRefreshNeeded } from "@/utils/refresh-events";
 
 const CALENDAR_THEME = {
   backgroundColor: "#ffffff",
@@ -48,9 +51,42 @@ function formatTime(isoString: string) {
   });
 }
 
+function getTodayDateString() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/** 웹에서는 Alert.alert가 동작하지 않아 window.alert 사용 */
+function showAlert(title: string, message: string) {
+  if (Platform.OS === "web") {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
+/** 웹에서는 window.confirm, 네이티브에서는 Alert.alert 사용 */
+function showConfirm(
+  title: string,
+  message: string,
+  onConfirm: () => void | Promise<void>,
+) {
+  if (Platform.OS === "web") {
+    if (window.confirm(`${title}\n\n${message}`)) {
+      void onConfirm();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: "취소", style: "cancel" },
+      { text: "삭제", style: "destructive", onPress: onConfirm },
+    ]);
+  }
+}
+
 export default function TabTwoScreen() {
+  const router = useRouter();
   const [records, setRecords] = useState<DietRecord[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState<string>(() => {
     const now = new Date();
@@ -72,8 +108,13 @@ export default function TabTwoScreen() {
   useFocusEffect(
     useCallback(() => {
       loadRecords();
-    }, [loadRecords])
+    }, [loadRecords]),
   );
+
+  useEffect(() => {
+    const unsubscribe = onRefreshNeeded(loadRecords);
+    return unsubscribe;
+  }, [loadRecords]);
 
   const buildMarkedDates = useCallback(() => {
     const marks: Record<string, object> = {};
@@ -100,6 +141,33 @@ export default function TabTwoScreen() {
     setSelectedDate(day.dateString);
   };
 
+  const handleDelete = (record: DietRecord) => {
+    const performDelete = async () => {
+      try {
+        await deleteDietRecord(record.id);
+        await loadRecords();
+        notifyRefreshNeeded();
+        setTimeout(() => {
+          showAlert("삭제 완료", "기록이 삭제되었습니다.");
+        }, Platform.OS === "web" ? 0 : 300);
+      } catch (error) {
+        console.error("삭제 실패:", error);
+        setTimeout(() => {
+          showAlert("삭제 실패", "기록 삭제 중 문제가 발생했습니다.");
+        }, Platform.OS === "web" ? 0 : 300);
+      }
+    };
+
+    showConfirm("기록 삭제", "이 기록을 삭제하시겠습니까?", performDelete);
+  };
+
+  const handleEdit = (record: DietRecord) => {
+    router.push({
+      pathname: "/edit-record",
+      params: { record: JSON.stringify(record) },
+    });
+  };
+
   const dayRecords = selectedDate
     ? records.filter((r) => r.date === selectedDate)
     : [];
@@ -107,7 +175,7 @@ export default function TabTwoScreen() {
   const totalCalories = dayRecords.reduce(
     (acc, r) =>
       acc + r.items.reduce((sum, item) => sum + (item.calories ?? 0), 0),
-    0
+    0,
   );
 
   const monthlyTotalCalories = records
@@ -115,7 +183,7 @@ export default function TabTwoScreen() {
     .reduce(
       (acc, r) =>
         acc + r.items.reduce((sum, item) => sum + (item.calories ?? 0), 0),
-      0
+      0,
     );
 
   const monthHeaderLabel = `${currentMonth.slice(0, 4)}년 ${parseInt(currentMonth.slice(5), 10)}월`;
@@ -123,8 +191,12 @@ export default function TabTwoScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.monthlySummary}>
-        <Text style={styles.monthlySummaryLabel}>{monthHeaderLabel} 총 칼로리</Text>
-        <Text style={styles.monthlySummaryValue}>{monthlyTotalCalories.toLocaleString()}kcal</Text>
+        <Text style={styles.monthlySummaryLabel}>
+          {monthHeaderLabel} 총 칼로리
+        </Text>
+        <Text style={styles.monthlySummaryValue}>
+          {monthlyTotalCalories.toLocaleString()}kcal
+        </Text>
       </View>
 
       <Calendar
@@ -133,6 +205,7 @@ export default function TabTwoScreen() {
         markedDates={markedDates}
         onDayPress={handleDayPress}
         onMonthChange={(month) => setCurrentMonth(month.dateString.slice(0, 7))}
+        initialDate={getTodayDateString()}
         monthFormat="yyyy년 M월"
         enableSwipeMonths
         firstDay={0}
@@ -140,20 +213,50 @@ export default function TabTwoScreen() {
 
       <View style={styles.listContainer}>
         {loading ? (
-          <ActivityIndicator size="large" color="#4caf50" style={styles.loader} />
+          <ActivityIndicator
+            size="large"
+            color="#4caf50"
+            style={styles.loader}
+          />
         ) : selectedDate ? (
           <>
             <View style={styles.dateHeader}>
               <Text style={styles.dateTitle}>
                 {selectedDate.replace(/-/g, ". ")} 기록
               </Text>
-              <Text style={styles.totalCalories}>
-                총 {totalCalories}kcal
-              </Text>
+              <View style={styles.dateHeaderRight}>
+                <Text style={styles.totalCalories}>총 {totalCalories}kcal</Text>
+                <TouchableOpacity
+                  style={styles.addRecordButton}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/add-record",
+                      params: { date: selectedDate },
+                    })
+                  }
+                >
+                  <Text style={styles.addRecordButtonText}>+ 추가</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {dayRecords.length === 0 ? (
-              <Text style={styles.emptyText}>이 날짜에 기록이 없습니다.</Text>
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>이 날짜에 기록이 없습니다.</Text>
+                <TouchableOpacity
+                  style={styles.addRecordButtonLarge}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/add-record",
+                      params: { date: selectedDate },
+                    })
+                  }
+                >
+                  <Text style={styles.addRecordButtonLargeText}>
+                    기록 추가하기
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <ScrollView
                 style={styles.scroll}
@@ -162,14 +265,28 @@ export default function TabTwoScreen() {
               >
                 {dayRecords.map((record) => (
                   <View key={record.id} style={styles.recordCard}>
-                    <Text style={styles.recordTime}>
-                      {formatTime(record.recordedAt)}
-                    </Text>
+                    <View style={styles.recordHeader}>
+                      <Text style={styles.recordTime}>
+                        {formatTime(record.recordedAt)}
+                      </Text>
+                      <View style={styles.recordActions}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleEdit(record)}
+                        >
+                          <Text style={styles.actionButtonText}>수정</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.deleteButton]}
+                          onPress={() => handleDelete(record)}
+                        >
+                          <Text style={styles.actionButtonText}>삭제</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                     {record.items.map((item, idx) => (
                       <View key={idx} style={styles.itemRow}>
-                        <Text style={styles.itemName}>
-                          {getFoodName(item)}
-                        </Text>
+                        <Text style={styles.itemName}>{getFoodName(item)}</Text>
                         <Text style={styles.itemCalories}>
                           {item.calories ?? 0}kcal
                           {item.carbohydrates != null &&
@@ -185,7 +302,9 @@ export default function TabTwoScreen() {
             )}
           </>
         ) : (
-          <Text style={styles.hintText}>날짜를 선택하면 기록을 볼 수 있습니다.</Text>
+          <Text style={styles.hintText}>
+            날짜를 선택하면 기록을 볼 수 있습니다.
+          </Text>
         )}
       </View>
     </View>
@@ -264,16 +383,47 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#333",
   },
+  dateHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   totalCalories: {
     fontSize: 16,
     fontWeight: "600",
     color: "#4caf50",
   },
+  addRecordButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#4caf50",
+    borderRadius: 8,
+  },
+  addRecordButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  emptyState: {
+    alignItems: "center",
+    marginTop: 24,
+  },
   emptyText: {
     fontSize: 15,
     color: "#999",
     textAlign: "center",
-    marginTop: 24,
+    marginBottom: 16,
+  },
+  addRecordButtonLarge: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    backgroundColor: "#4caf50",
+    borderRadius: 10,
+  },
+  addRecordButtonLargeText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
   hintText: {
     fontSize: 15,
@@ -293,10 +443,33 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
+  recordHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
   recordTime: {
     fontSize: 13,
     color: "#666",
-    marginBottom: 8,
+  },
+  recordActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    backgroundColor: "#4caf50",
+    borderRadius: 6,
+  },
+  deleteButton: {
+    backgroundColor: "#f44336",
+  },
+  actionButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
   },
   itemRow: {
     marginBottom: 4,
